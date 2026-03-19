@@ -6,6 +6,7 @@ import { SettingsPopover } from './SettingsPopover';
 import { CharacterModal, type CharacterSelection } from './CharacterModal';
 import { VoicePickerDialog } from './VoicePickerDialog';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -27,6 +28,15 @@ import { validateProjectState } from '@/shared/projects';
 import { useAppLanguage } from '@/components/providers/AppLanguageProvider';
 import type { AppLanguageCode } from '@/shared/constants/app-language';
 import { TokenLowBalanceAlert } from './TokenLowBalanceAlert';
+import {
+  clearStoredToolPrefill,
+  readStoredToolPrefill,
+  readToolPrefillFromQuery,
+  removeToolPrefillQueryParams,
+  storeToolPrefill,
+  TOOL_PREFILL_MAX_TEXT_CHARS,
+  type ToolLandingPrefill,
+} from './helpers';
 
 function snapshotToSelection(snapshot: CharacterSelectionSnapshot | null | undefined): CharacterSelection | null {
   if (!snapshot) return null;
@@ -130,6 +140,7 @@ const PROMPT_INPUT_COPY: Record<AppLanguageCode, PromptInputCopy> = {
 };
 
 export function PromptInput() {
+  const { status: authStatus } = useSession();
   const { language } = useAppLanguage();
   const copy = PROMPT_INPUT_COPY[language];
   const { settings, update } = useSettings();
@@ -148,6 +159,8 @@ export function PromptInput() {
   const [submitting, setSubmitting] = useState(false);
   const [savingUseExact, setSavingUseExact] = useState(false);
   const [groupMode, setGroupMode] = useState(false);
+  const [pendingToolPrefill, setPendingToolPrefill] = useState<ToolLandingPrefill | null>(null);
+  const [toolPrefillReady, setToolPrefillReady] = useState(false);
   const { summary: tokenSummary, balance: tokenBalance, loading: tokensLoading } = useTokenSummary();
   const [templateSelection, setTemplateSelection] = useState<TemplateSelection | null>(null);
   const handleTemplateChange = useCallback((sel: TemplateSelection | null) => setTemplateSelection(sel), []);
@@ -161,6 +174,49 @@ export function PromptInput() {
     !settings.watermarkEnabled ||
     !settings.captionsEnabled
   );
+
+  const applyToolPrefill = useCallback((prefill: ToolLandingPrefill) => {
+    if (typeof prefill.text === 'string' && prefill.text.trim().length > 0) {
+      setText(prefill.text.slice(0, TOOL_PREFILL_MAX_TEXT_CHARS));
+    }
+
+    if (Array.isArray(prefill.languages) && prefill.languages.length > 0) {
+      const normalizedLanguages = normalizeLanguageList(prefill.languages, DEFAULT_LANGUAGE);
+      setLanguages(normalizedLanguages);
+    }
+
+    if (prefill.languageVoices) {
+      const normalizedVoiceMap = normalizeLanguageVoiceMap(prefill.languageVoices);
+      if (Object.keys(normalizedVoiceMap).length > 0) {
+        setLanguageVoices(normalizedVoiceMap);
+      }
+    }
+
+    if (typeof prefill.durationSeconds === 'number' && Number.isFinite(prefill.durationSeconds)) {
+      const rounded = Math.max(1, Math.round(prefill.durationSeconds));
+      const nextDuration = MAIN_PAGE_DURATION_OPTIONS.some((option) => option === rounded)
+        ? rounded
+        : MAIN_PAGE_DURATION_OPTIONS[0];
+      setDuration(nextDuration);
+    }
+  }, []);
+
+  useEffect(() => {
+    const fromQuery = readToolPrefillFromQuery();
+    if (fromQuery) {
+      storeToolPrefill(fromQuery);
+    }
+    removeToolPrefillQueryParams();
+
+    const stored = readStoredToolPrefill();
+    setPendingToolPrefill(stored);
+    setToolPrefillReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (authStatus !== 'authenticated') return;
+    clearStoredToolPrefill();
+  }, [authStatus]);
 
   // Pick a random placeholder once per mount (no persistence across reloads)
   useEffect(() => {
@@ -187,6 +243,18 @@ export function PromptInput() {
     setLanguageVoices(storedVoices);
     setInitedFromSettings(true);
   }, [settings, initedFromSettings]);
+
+  useEffect(() => {
+    if (!toolPrefillReady || !pendingToolPrefill) return;
+    if (authStatus === 'loading') return;
+    if (settings && !initedFromSettings) return;
+
+    applyToolPrefill(pendingToolPrefill);
+    if (authStatus === 'authenticated') {
+      clearStoredToolPrefill();
+    }
+    setPendingToolPrefill(null);
+  }, [applyToolPrefill, authStatus, initedFromSettings, pendingToolPrefill, settings, toolPrefillReady]);
 
   useEffect(() => {
     if (!settings) return;
