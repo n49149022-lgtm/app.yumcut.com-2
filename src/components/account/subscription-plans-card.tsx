@@ -39,7 +39,6 @@ type SubscriptionCardCopy = {
   checkoutError: string;
   portalError: string;
   notConfigured: string;
-  recurringHint: string;
 };
 
 const COPY: Record<AppLanguageCode, SubscriptionCardCopy> = {
@@ -69,8 +68,6 @@ const COPY: Record<AppLanguageCode, SubscriptionCardCopy> = {
     checkoutError: 'Failed to start checkout.',
     portalError: 'Failed to open billing portal.',
     notConfigured: 'Stripe billing is not configured yet.',
-    recurringHint:
-      'Renewals are processed automatically. Every successful weekly charge grants 150 tokens, monthly charge grants 600 tokens.',
   },
   ru: {
     title: 'Планы подписки',
@@ -98,8 +95,6 @@ const COPY: Record<AppLanguageCode, SubscriptionCardCopy> = {
     checkoutError: 'Не удалось запустить оплату.',
     portalError: 'Не удалось открыть billing portal.',
     notConfigured: 'Stripe-подписки пока не настроены.',
-    recurringHint:
-      'Продление происходит автоматически. Каждое успешное недельное списание даёт 150 токенов, месячное — 600 токенов.',
   },
 };
 
@@ -308,8 +303,6 @@ export function SubscriptionPlansCard({ initialStatus }: { initialStatus: Subscr
             })}
           </div>
         )}
-
-        <p className="text-xs text-gray-500 dark:text-gray-400">{t.recurringHint}</p>
 
         {status.canManageBilling ? (
           <Button variant="outline" onClick={() => void openPortal()} disabled={openingPortal || checkoutPlan !== null}>
