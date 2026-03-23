@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BadgeCheck, CalendarClock, CreditCard, Loader2, RefreshCcw, Repeat } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -124,18 +124,23 @@ export function SubscriptionPlansCard({ initialStatus }: { initialStatus: Subscr
     [status.plans, activeProductId],
   );
 
-  const refreshStatus = async () => {
+  const fetchStatus = useCallback(async () => {
+    const nextStatus = await Api.getSubscriptionStatus();
+    setStatus(nextStatus);
+    requestTokenRefresh();
+    return nextStatus;
+  }, []);
+
+  const refreshStatus = useCallback(async () => {
     setRefreshing(true);
     try {
-      const nextStatus = await Api.getSubscriptionStatus();
-      setStatus(nextStatus);
-      requestTokenRefresh();
+      await fetchStatus();
     } catch (error) {
       void error;
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [fetchStatus]);
 
   const startCheckout = async (plan: 'weekly' | 'monthly') => {
     setCheckoutPlan(plan);
@@ -168,11 +173,30 @@ export function SubscriptionPlansCard({ initialStatus }: { initialStatus: Subscr
     const hasSessionId = Boolean(searchParams.get('session_id'));
     if (!billingState && !hasSessionId) return;
 
+    const shouldSyncAfterRedirect = billingState === 'success' || hasSessionId;
     if (billingState === 'success') {
       toast.success(t.checkoutSuccess);
-      void refreshStatus();
     } else if (billingState === 'cancelled') {
       toast.info(t.checkoutCancelled);
+    }
+
+    let cancelled = false;
+    if (shouldSyncAfterRedirect) {
+      void (async () => {
+        const attempts = 8;
+        for (let index = 0; index < attempts; index += 1) {
+          if (cancelled) return;
+          try {
+            const next = await fetchStatus();
+            if (next.active) return;
+          } catch (error) {
+            void error;
+          }
+          if (index < attempts - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+          }
+        }
+      })();
     }
 
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -180,8 +204,11 @@ export function SubscriptionPlansCard({ initialStatus }: { initialStatus: Subscr
     nextParams.delete('session_id');
     const nextQuery = nextParams.toString();
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, pathname, router, t.checkoutSuccess, t.checkoutCancelled]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, pathname, router, t.checkoutSuccess, t.checkoutCancelled, fetchStatus]);
 
   return (
     <Card>
