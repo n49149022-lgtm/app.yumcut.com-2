@@ -186,15 +186,26 @@ async function findCustomerIdFromLatestStripeSubscription(userId: string) {
   }
 }
 
+function getSubscriptionCurrentPeriodEndUnix(subscription: Stripe.Subscription) {
+  const values = subscription.items.data
+    .map((item) => (typeof item.current_period_end === 'number' ? item.current_period_end : null))
+    .filter((value): value is number => value !== null);
+  if (values.length === 0) return null;
+  return Math.max(...values);
+}
+
 function mapStripeCancellationState(subscription: Stripe.Subscription) {
+  const currentPeriodEnd = getSubscriptionCurrentPeriodEndUnix(subscription);
   const effectiveUnix =
     subscription.cancel_at ??
-    subscription.canceled_at ??
+    (subscription.cancel_at_period_end ? currentPeriodEnd : null) ??
     null;
   return {
     cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
     cancellationEffectiveAt:
-      effectiveUnix !== null ? coerceUnixSecondsToDate(effectiveUnix).toISOString() : null,
+      subscription.cancel_at_period_end && effectiveUnix !== null
+        ? coerceUnixSecondsToDate(effectiveUnix).toISOString()
+        : null,
   };
 }
 
@@ -209,7 +220,9 @@ function isStripeSubscriptionActiveLike(status: Stripe.Subscription.Status) {
 }
 
 function stripeSubscriptionSortTimestamp(subscription: Stripe.Subscription) {
+  const currentPeriodEnd = getSubscriptionCurrentPeriodEndUnix(subscription);
   return (
+    currentPeriodEnd ??
     subscription.cancel_at ??
     subscription.canceled_at ??
     subscription.created ??
@@ -220,9 +233,14 @@ function stripeSubscriptionSortTimestamp(subscription: Stripe.Subscription) {
 function pickBestSubscriptionCandidate(
   subscriptions: Stripe.Subscription[],
   expectedProductId: string | null,
+  expectedSubscriptionId: string | null,
 ) {
   if (subscriptions.length === 0) return null;
   const sorted = [...subscriptions].sort((left, right) => {
+    const leftMatchesSubId = Boolean(expectedSubscriptionId && left.id === expectedSubscriptionId);
+    const rightMatchesSubId = Boolean(expectedSubscriptionId && right.id === expectedSubscriptionId);
+    if (leftMatchesSubId !== rightMatchesSubId) return leftMatchesSubId ? -1 : 1;
+
     const leftPlan = getPlanFromSubscription(left)?.plan;
     const rightPlan = getPlanFromSubscription(right)?.plan;
     const leftMatches = Boolean(expectedProductId && leftPlan?.productId === expectedProductId);
@@ -243,6 +261,25 @@ function pickBestSubscriptionCandidate(
 
 async function getStripeCancellationStatus(userId: string, expectedProductId: string | null) {
   const stripe = getStripeClient();
+  const expectedSubscriptionId = await findLatestStripeSubscriptionId(userId);
+
+  if (expectedSubscriptionId) {
+    try {
+      const direct = await stripe.subscriptions.retrieve(expectedSubscriptionId);
+      const directPlan = getPlanFromSubscription(direct)?.plan;
+      const planMatches = !expectedProductId || directPlan?.productId === expectedProductId;
+      if (planMatches) {
+        return mapStripeCancellationState(direct);
+      }
+    } catch (error) {
+      logStripeSubscriptionEvent('cancellation_status_direct_lookup_failed', {
+        userId,
+        subscriptionId: expectedSubscriptionId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   const customerId =
     (await findCustomerIdFromPurchaseHistory(userId)) ??
     (await findCustomerIdFromLatestStripeSubscription(userId));
@@ -254,7 +291,7 @@ async function getStripeCancellationStatus(userId: string, expectedProductId: st
         status: 'all',
         limit: 20,
       });
-      const candidate = pickBestSubscriptionCandidate(listed.data, expectedProductId);
+      const candidate = pickBestSubscriptionCandidate(listed.data, expectedProductId, expectedSubscriptionId);
       if (candidate) return mapStripeCancellationState(candidate);
     } catch (error) {
       logStripeSubscriptionEvent('cancellation_status_list_failed', {
@@ -265,7 +302,7 @@ async function getStripeCancellationStatus(userId: string, expectedProductId: st
     }
   }
 
-  const subscriptionId = await findLatestStripeSubscriptionId(userId);
+  const subscriptionId = expectedSubscriptionId;
   if (!subscriptionId) {
     return {
       cancelAtPeriodEnd: false,
