@@ -224,10 +224,11 @@ export const POST = withApiError(async function POST(req: NextRequest) {
   const from = (received?.from || event.data?.from || '').trim() || 'unknown';
   const to = received?.to?.length ? received.to : asStringArray(event.data?.to);
   const subject = (received?.subject || event.data?.subject || '').trim() || '(no subject)';
+  const eventData = event.data as (typeof event.data & { text?: string | null; html?: string | null }) | undefined;
 
   const apiSnippet = toSnippet({
-    text: received?.text ?? event.data?.text ?? null,
-    html: (received as any)?.html ?? (event.data as any)?.html ?? null,
+    text: received?.text ?? eventData?.text ?? null,
+    html: received?.html ?? eventData?.html ?? null,
   });
 
   const rawDownloadUrl = received?.raw?.download_url?.trim() ?? '';
