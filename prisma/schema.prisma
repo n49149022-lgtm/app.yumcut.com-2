@@ -45,6 +45,7 @@ model User {
   publishChannelLanguages   PublishChannelLanguage[]
   publishChannelOAuthStates PublishChannelOAuthState[] @relation("UserPublishChannelOAuthStates")
   publishTasks              PublishTask[]
+  plannedEmails             PlannedEmail[]
   subscriptionPurchases     SubscriptionPurchase[]
   guestProfile              GuestProfile?
 }
@@ -447,6 +448,28 @@ model PublishTask {
   @@index([status, publishAt])
   @@index([channelId, publishAt])
   @@index([userId, languageCode])
+}
+
+model PlannedEmail {
+  id          String   @id @default(uuid()) @db.Char(36)
+  userId      String   @db.Char(36)
+  email       String   @db.VarChar(320)
+  kind        String   @db.VarChar(64)
+  targetLanguage String @default("en") @db.VarChar(8)
+  scheduledAt DateTime
+  status      String   @default("pending") @db.VarChar(32)
+  attempts    Int      @default(0)
+  sentAt      DateTime?
+  lastError   String?  @db.Text
+  lockId      String?  @db.Char(36)
+  lockedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind])
+  @@index([status, scheduledAt])
+  @@index([lockId, lockedAt])
 }
 
 model UserCharacterImageTask {

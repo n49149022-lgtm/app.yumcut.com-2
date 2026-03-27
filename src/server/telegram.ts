@@ -682,6 +682,30 @@ async function notifyAdminsInternal<K extends AdminNotificationKind>(kind: K, pa
   );
 }
 
+export async function notifyAdminsWithMessage(message: string) {
+  if (!isTelegramEnabled()) return;
+  const trimmed = message.trim();
+  if (!trimmed) return;
+
+  try {
+    const recipients = await prisma.telegramAccount.findMany({
+      where: { user: { isAdmin: true } },
+      select: { chatId: true },
+    });
+    if (recipients.length === 0) return;
+    await Promise.allSettled(
+      recipients.map(({ chatId }) =>
+        sendTelegramMessage(chatId, trimmed, { disableWebPagePreview: true }).catch((err) => {
+          console.error('Failed to send raw admin Telegram message', { chatId, err });
+          return false;
+        }),
+      ),
+    );
+  } catch (err) {
+    console.error('Failed to process raw admin Telegram notification', { err });
+  }
+}
+
 export function notifyAdminsOfNewUser(payload: AdminNotificationPayloads['new_user']) {
   return notifyAdminsInternal('new_user', payload);
 }

@@ -130,6 +130,47 @@ YumCut focuses on being the open-source/free analog for end-to-end short vertica
 
 Technical setup and implementation details were moved to [docs/tech.md](docs/tech.md).
 
+## Email Automation (Resend)
+
+YumCut now supports:
+
+- onboarding emails for new users (welcome right away + follow-up after 24 hours),
+- periodic sending via a cron-safe endpoint/script,
+- inbound email webhook forwarding to Telegram admins.
+
+Required env variables:
+
+- `RESEND_API_KEY` - API key from Resend. Use a **Full access** key if you process inbound emails (`email.received`) so `emails.receiving.get` can retrieve message bodies.
+- `RESEND_FROM_EMAIL` - verified sender (example: `YumCut <support@yumcut.com>`).
+- `RESEND_WEBHOOK_SECRET` - webhook signing secret from Resend.
+
+Cron processing endpoint (no authorization required):
+
+- `GET https://app.yumcut.com/api/cron/planned-emails`
+
+Example crontab (run every 30 minutes on production host):
+
+```cron
+*/30 * * * * curl -fsS https://app.yumcut.com/api/cron/planned-emails >/dev/null 2>&1
+```
+
+Local/script alternative:
+
+```bash
+npm run emails:planned:send
+```
+
+Inbound receiving webhook endpoint:
+
+- `POST https://app.yumcut.com/api/resend/inbound`
+
+Resend dashboard setup (Custom Domains -> Receiving):
+
+1. Add and verify your receiving domain DNS records in Resend.
+2. Create a webhook for `email.received`.
+3. Point it to `https://app.yumcut.com/api/resend/inbound`.
+4. Put the webhook signing secret into `RESEND_WEBHOOK_SECRET`.
+
 ## Free Clippie AI Alternative
 
 If you are looking for a free Clippie AI alternative, YumCut is designed as an open-source path for similar short-form workflows:

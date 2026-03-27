@@ -3,6 +3,7 @@ import { prisma } from '@/server/db';
 import { notifyAdminsOfNewUser } from '@/server/telegram';
 import { reactivateDeletedUser } from '@/server/account/reactivate-user';
 import { grantConfiguredSignUpBonus } from '@/server/account/sign-up-bonus';
+import { scheduleUserOnboardingEmails } from '@/server/emails/planned';
 
 export type OAuthProfile = {
   providerAccountId: string;
@@ -146,5 +147,12 @@ async function afterUserCreated(user: { id: string; email: string; preferredLang
   }
   notifyAdminsOfNewUser({ userId: user.id, email: user.email, name, signupBonusAmount }).catch((err) => {
     console.error('Failed to notify admins about new mobile user', err);
+  });
+  scheduleUserOnboardingEmails({
+    userId: user.id,
+    email: user.email,
+    name,
+  }).catch((err) => {
+    console.error('Failed to schedule onboarding emails for new mobile user', err);
   });
 }

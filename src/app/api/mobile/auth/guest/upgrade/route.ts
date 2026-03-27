@@ -12,6 +12,7 @@ import {
 } from '@/server/mobile-auth';
 import { reactivateDeletedUser } from '@/server/account/reactivate-user';
 import { notifyAdminsOfGuestConversion } from '@/server/telegram';
+import { scheduleUserOnboardingEmails } from '@/server/emails/planned';
 
 const BaseSchema = z.object({
   deviceId: z.string().min(3).max(191),
@@ -95,7 +96,9 @@ export const POST = withApiError(async function POST(req: NextRequest) {
   }
 
   let finalUserId = guestUser.id;
+  let mergedIntoExisting = false;
   if (targetUserId && targetUserId !== guestUser.id) {
+    mergedIntoExisting = true;
     await mergeGuestIntoUser({ guestUserId: guestUser.id, targetUserId });
     finalUserId = targetUserId;
   } else {
@@ -148,10 +151,20 @@ export const POST = withApiError(async function POST(req: NextRequest) {
     userEmail: finalUser?.email ?? normalizedEmail,
     userName: finalUser?.name ?? providerPayload.name ?? null,
     provider: body.provider,
-    mergedIntoExisting: Boolean(targetUserId && targetUserId !== guestUser.id),
+    mergedIntoExisting,
   }).catch((err) => {
     console.error('Failed to notify admins of guest conversion', err);
   });
+
+  if (!mergedIntoExisting) {
+    scheduleUserOnboardingEmails({
+      userId: finalUserId,
+      email: finalUser?.email ?? normalizedEmail,
+      name: finalUser?.name ?? providerPayload.name ?? null,
+    }).catch((err) => {
+      console.error('Failed to schedule onboarding emails for upgraded guest user', err);
+    });
+  }
 
   return ok({
     user: finalUser,
