@@ -119,6 +119,43 @@ Key flags:
 - Main app always runs in UI mode; the storage worker is now a separate service. Configure `NEXT_PUBLIC_STORAGE_BASE_URL` / `STORAGE_PUBLIC_URL` to point at the storage host.
 - `STORAGE_ALLOWED_ORIGINS` controls which browser origins can POST to the storage uploader (comma-separated list).
 
+### Email Automation (Resend)
+
+YumCut supports:
+- onboarding emails for new users (welcome immediately + follow-up after 24 hours),
+- periodic planned-email processing via cron/script,
+- inbound email webhook forwarding to Telegram admins.
+
+Required env variables:
+- `RESEND_API_KEY` - API key from Resend. Use a **Full access** key if you process inbound emails (`email.received`) so `emails.receiving.get` can retrieve message bodies.
+- `RESEND_FROM_EMAIL` - verified sender (example: `YumCut <support@yumcut.com>`).
+- `RESEND_WEBHOOK_SECRET` - webhook signing secret from Resend.
+- `SERVICE_API_PASSWORD` - required for protected cron endpoint auth (`x-service-password` header).
+
+Cron processing endpoint (requires `x-service-password` header with `SERVICE_API_PASSWORD`):
+- `GET https://app.yumcut.com/api/cron/planned-emails`
+
+Example crontab (run every 30 minutes on production host):
+
+```cron
+*/30 * * * * curl -fsS -H "x-service-password: $SERVICE_API_PASSWORD" https://app.yumcut.com/api/cron/planned-emails >/dev/null 2>&1
+```
+
+Local/script alternative:
+
+```bash
+npm run emails:planned:send
+```
+
+Inbound receiving webhook endpoint:
+- `POST https://app.yumcut.com/api/resend/inbound`
+
+Resend dashboard setup (Custom Domains -> Receiving):
+1. Add and verify your receiving domain DNS records in Resend.
+2. Create a webhook for `email.received`.
+3. Point it to `https://app.yumcut.com/api/resend/inbound`.
+4. Put the webhook signing secret into `RESEND_WEBHOOK_SECRET`.
+
 ### Mobile authentication (Google & Apple)
 
 The iOS app now talks to the same backend via dedicated mobile-auth routes. Configure these extra secrets in `.env` (or your deployment environment) before enabling the feature:

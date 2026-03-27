@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { ok, error } from '@/server/http';
+import { ok, error, forbidden } from '@/server/http';
 import { withApiError } from '@/server/errors';
 import { processPlannedEmails } from '@/server/emails/planned';
+import { assertServiceAuth } from '@/server/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,8 @@ function parseLockStaleMinutes(value: string | null | undefined): number | undef
 }
 
 export const GET = withApiError(async function GET(req: NextRequest) {
+  if (!assertServiceAuth(req)) return forbidden('Invalid service credentials');
+
   const limit = parseLimit(req.nextUrl.searchParams.get('limit'));
   const lockStaleMinutes = parseLockStaleMinutes(req.nextUrl.searchParams.get('lockStaleMinutes'));
 
@@ -43,6 +46,8 @@ export const GET = withApiError(async function GET(req: NextRequest) {
 }, 'Failed to process planned emails');
 
 export const POST = withApiError(async function POST(req: NextRequest) {
+  if (!assertServiceAuth(req)) return forbidden('Invalid service credentials');
+
   const bodyRaw = await req.json().catch(() => ({}));
   const body = BodySchema.safeParse(bodyRaw);
   if (!body.success) {
