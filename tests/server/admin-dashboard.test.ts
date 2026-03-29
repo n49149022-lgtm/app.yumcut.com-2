@@ -104,41 +104,47 @@ function setupDefaultMockData() {
   templateOverlayCount.mockResolvedValue(1);
 }
 
-describe('getAdminDashboardSnapshot guest filtering', () => {
+describe('getAdminDashboardSnapshot user analytics filters', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     setupDefaultMockData();
   });
 
-  it('excludes @guest.yumcut users by default', async () => {
+  it('excludes deleted and @guest.yumcut users by default', async () => {
     await getAdminDashboardSnapshot();
 
     expect(userCount).toHaveBeenCalledWith({
-      where: { email: { not: { endsWith: '@guest.yumcut' } } },
+      where: {
+        deleted: false,
+        email: { not: { endsWith: '@guest.yumcut' } },
+      },
     });
 
     const recentUsersQuery = userFindMany.mock.calls[0]?.[0];
     expect(recentUsersQuery.where).toEqual({
+      deleted: false,
       email: { not: { endsWith: '@guest.yumcut' } },
     });
 
     const dailyNewUsersQuery = userFindMany.mock.calls[1]?.[0];
     expect(dailyNewUsersQuery.where).toMatchObject({
+      deleted: false,
       email: { not: { endsWith: '@guest.yumcut' } },
     });
     expect(dailyNewUsersQuery.where.createdAt).toBeDefined();
   });
 
-  it('includes guest users when includeGuestUsers=true', async () => {
+  it('includes guest users but still excludes deleted users when includeGuestUsers=true', async () => {
     await getAdminDashboardSnapshot({ includeGuestUsers: true });
 
-    expect(userCount).toHaveBeenCalledWith({ where: undefined });
+    expect(userCount).toHaveBeenCalledWith({ where: { deleted: false } });
 
     const recentUsersQuery = userFindMany.mock.calls[0]?.[0];
-    expect(recentUsersQuery.where).toBeUndefined();
+    expect(recentUsersQuery.where).toEqual({ deleted: false });
 
     const dailyNewUsersQuery = userFindMany.mock.calls[1]?.[0];
     expect(dailyNewUsersQuery.where.createdAt).toBeDefined();
+    expect(dailyNewUsersQuery.where.deleted).toBe(false);
     expect(dailyNewUsersQuery.where.email).toBeUndefined();
   });
 });

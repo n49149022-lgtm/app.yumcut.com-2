@@ -72,6 +72,7 @@ describe('deleteUserAccount', () => {
       templateArtStyle: { deleteMany: vi.fn() },
       templateVoiceStyle: { deleteMany: vi.fn() },
       templateMusic: { deleteMany: vi.fn() },
+      plannedEmail: { deleteMany: vi.fn() },
       tokenTransaction: { deleteMany: vi.fn() },
       subscriptionPurchase: { deleteMany: vi.fn() },
       telegramLinkToken: { deleteMany: vi.fn() },
@@ -87,6 +88,7 @@ describe('deleteUserAccount', () => {
     await deleteUserAccount({ userId: 'user-1', source: 'web' });
 
     expect(tx.projectTemplateImage.deleteMany).toHaveBeenCalledWith({ where: { project: { userId: 'user-1' } } });
+    expect(tx.plannedEmail.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
   });
 
   it('deletes uploaded image assets from storage', async () => {
@@ -119,6 +121,7 @@ describe('deleteUserAccount', () => {
       templateArtStyle: { deleteMany: vi.fn() },
       templateVoiceStyle: { deleteMany: vi.fn() },
       templateMusic: { deleteMany: vi.fn() },
+      plannedEmail: { deleteMany: vi.fn() },
       tokenTransaction: { deleteMany: vi.fn() },
       subscriptionPurchase: { deleteMany: vi.fn() },
       telegramLinkToken: { deleteMany: vi.fn() },

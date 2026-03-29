@@ -27,9 +27,12 @@ type AdminDashboardSnapshotOptions = {
 
 export async function getAdminDashboardSnapshot(options?: AdminDashboardSnapshotOptions) {
   const includeGuestUsers = options?.includeGuestUsers === true;
-  const guestUserFilter = includeGuestUsers
-    ? undefined
-    : { email: { not: { endsWith: GUEST_EMAIL_SUFFIX } } };
+  const userAnalyticsFilter = includeGuestUsers
+    ? { deleted: false }
+    : {
+      deleted: false,
+      email: { not: { endsWith: GUEST_EMAIL_SUFFIX } },
+    };
   const p = prisma as any;
   const now = new Date();
   const dailyNewUserSlots = Array.from({ length: DAILY_NEW_USERS_WINDOW_DAYS }, (_, index) => {
@@ -67,7 +70,7 @@ export async function getAdminDashboardSnapshot(options?: AdminDashboardSnapshot
     overlaysPublic,
     overlaysPrivate,
   ] = await prisma.$transaction([
-    prisma.user.count({ where: guestUserFilter }),
+    prisma.user.count({ where: userAnalyticsFilter }),
     prisma.project.count({ where: { deleted: false } }),
     prisma.project.count({
       where: {
@@ -82,7 +85,7 @@ export async function getAdminDashboardSnapshot(options?: AdminDashboardSnapshot
     }),
     prisma.project.count({ where: { deleted: false, status: ProjectStatus.Error } }),
     prisma.user.findMany({
-      where: guestUserFilter,
+      where: userAnalyticsFilter,
       orderBy: { createdAt: 'desc' },
       select: { id: true, email: true, name: true, createdAt: true },
       take: 5,
@@ -90,7 +93,7 @@ export async function getAdminDashboardSnapshot(options?: AdminDashboardSnapshot
     prisma.user.findMany({
       where: {
         createdAt: { gte: oldestDailyNewUsersDate },
-        ...(guestUserFilter ?? {}),
+        ...userAnalyticsFilter,
       },
       select: { createdAt: true },
     }),

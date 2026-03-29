@@ -116,6 +116,7 @@ export async function deleteUserAccount(options: DeleteUserAccountOptions): Prom
     await tx.templateArtStyle.deleteMany({ where: { ownerId: userId } });
     await tx.templateVoiceStyle.deleteMany({ where: { ownerId: userId } });
     await tx.templateMusic.deleteMany({ where: { ownerId: userId } });
+    await tx.plannedEmail.deleteMany({ where: { userId } });
 
     await tx.tokenTransaction.deleteMany({ where: { userId } });
     await tx.subscriptionPurchase.deleteMany({ where: { userId } });
