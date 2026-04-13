@@ -1,0 +1,46 @@
+name: YumCut - Создать видео
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Твой промпт (напиши идею для видео)'
+        required: true
+        default: 'расскажи интересный факт о космосе'
+      template:
+        description: 'Стиль видео'
+        required: true
+        default: 'standard'
+        type: choice
+        options:
+          - standard
+          - simpsons
+          - horror
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run YumCut generator
+        run: |
+          npx ts-node src/cli.ts generate \
+            --prompt "${{ github.event.inputs.prompt }}" \
+            --template "${{ github.event.inputs.template }}"
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yumcut-video
+          path: output/*.mp4
+          retention-days: 7
