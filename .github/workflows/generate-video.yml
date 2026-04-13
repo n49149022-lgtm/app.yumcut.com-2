@@ -11,6 +11,8 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    env:
+      NEXTAUTH_URL: 'http://localhost:3000'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,13 +23,14 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: |
-          npm install
-          npm run build
+        run: npm install
 
-      - name: Run YumCut generator
+      - name: Create prompt file
         run: |
           echo "${{ github.event.inputs.prompt }}" > prompt.txt
+
+      - name: Generate video
+        run: |
           npm run generate -- --prompt-file prompt.txt
 
       - name: Upload video artifact
