@@ -7,15 +7,6 @@ on:
         description: 'Твой промпт (напиши идею для видео)'
         required: true
         default: 'расскажи интересный факт о космосе'
-      template:
-        description: 'Стиль видео'
-        required: true
-        default: 'standard'
-        type: choice
-        options:
-          - standard
-          - simpsons
-          - horror
 
 jobs:
   generate:
@@ -30,13 +21,14 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install
+          npm run build
 
       - name: Run YumCut generator
         run: |
-          npx ts-node src/cli.ts generate \
-            --prompt "${{ github.event.inputs.prompt }}" \
-            --template "${{ github.event.inputs.template }}"
+          echo "${{ github.event.inputs.prompt }}" > prompt.txt
+          npm run generate -- --prompt-file prompt.txt
 
       - name: Upload video artifact
         uses: actions/upload-artifact@v4
